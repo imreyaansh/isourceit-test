@@ -67,7 +67,7 @@
 <quick-view class="quick-view" data-product-url="{{ product.url }}" {{ block.shopify_attributes }}>
   {% if product != blank %}
     <button type="button" class="quick-view__button" aria-haspopup="dialog" aria-controls="quick-view-dialog-{{ block.id }}">
-      Quick view
+      {{ block.settings.button_label | default: 'Quick view' }}
     </button>
 
     <dialog id="quick-view-dialog-{{ block.id }}" class="quick-view__dialog" aria-labelledby="quick-view-title-{{ block.id }}">
