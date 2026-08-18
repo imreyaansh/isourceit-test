@@ -89,16 +89,18 @@
               subtree: true 
             });
 
-            // 4. Robust Visibility Trigger (Replaces window.scrollY)
+            // 4. Robust Visibility Trigger (Checks if element crossed the TOP of the viewport)
             this.visibilityObserver = new IntersectionObserver((entries) => {
               entries.forEach(entry => {
-                // If the main Add to Cart button is NOT visible on the screen
-                if (!entry.isIntersecting) {
+                // Check if the element is fully out of view AND its top edge is above the viewport
+                const isPastTop = entry.boundingClientRect.top < 0;
+
+                if (!entry.isIntersecting && isPastTop) {
                   this.removeAttribute('hidden');
                   // Use requestAnimationFrame to ensure the display transition works
                   requestAnimationFrame(() => this.classList.add('is-visible'));
                 } else {
-                  // If the main Add to Cart button IS visible
+                  // Hide if it is visible on screen OR if it is below the viewport
                   this.classList.remove('is-visible');
                   setTimeout(() => {
                     if (!this.classList.contains('is-visible')) {
@@ -108,10 +110,8 @@
                 }
               });
             }, { 
-              // 0 means it triggers as soon as the element is completely out of view
-              threshold: 0,
-              // Offset slightly so it triggers just before it fully leaves the screen
-              rootMargin: '0px 0px -50px 0px' 
+              // 0 means it triggers as soon as the element crosses the boundary completely
+              threshold: 0 
             });
 
             this.visibilityObserver.observe(this.mainBtn);

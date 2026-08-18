@@ -591,8 +591,21 @@
 
           if (!currentComponent) throw new Error('Could not find product-component to replace');
 
-          // Replace component
+          // Replace main component
           currentComponent.replaceWith(newProductComponent);
+
+          // === NEW: Update Sticky Add To Cart ===
+          // Only attempt to update the sticky add-to-cart if we are on the main page (not in a Quick View modal)
+          if (!quickViewModal) {
+            // Adjust these selectors if your theme uses a different class/tag for the sticky add-to-cart
+            const newStickyCart = dom.querySelector('sticky-add-to-cart') || dom.querySelector('.sticky-add-to-cart');
+            const currentStickyCart = document.querySelector('sticky-add-to-cart') || document.querySelector('.sticky-add-to-cart');
+            
+            if (newStickyCart && currentStickyCart) {
+              currentStickyCart.replaceWith(newStickyCart);
+            }
+          }
+          // ======================================
 
           // Re-execute scripts for the new product
           const targetScope = quickViewContentTarget || document;
@@ -636,7 +649,6 @@
         }
       }
     }
-    
     customElements.define('dynamic-stitch', DynamicStitch);
-  } 
+  }
 {% endjavascript %}
