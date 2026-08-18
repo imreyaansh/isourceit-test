@@ -1,0 +1,34 @@
+{% liquid
+  assign product = closest.product
+-%}
+{% render 'quick-add-button', product: product %}
+{% schema %}
+{
+  "name": "Quick view button",
+  "settings": [
+    {
+      "type": "text",
+      "id": "button_label",
+      "label": "Button label",
+      "default": "Quick view"
+    },
+    {
+      "type": "range",
+      "id": "desktop_width_percent",
+      "label": "Desktop width",
+      "min": 50,
+      "max": 100,
+      "step": 5,
+      "unit": "%",
+      "default": 100
+    }
+  ],
+  "presets": [
+    {
+      "name": "Quick view button"
+    }
+  ],
+  "tag": null,
+  "class": "quick-view-block"
+}
+{% endschema %}

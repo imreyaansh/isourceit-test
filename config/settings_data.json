@@ -11,8 +11,6 @@
   "current": {
     "logo_height": 36,
     "logo_height_mobile": 28,
-    "page_background_color": "{{ settings.color_palette.background }}",
-    "page_width": "narrow",
     "page_text_color": "{{ settings.color_palette.foreground }}",
     "type_body_font": "inter_n4",
     "type_subheading_font": "inter_n5",
@@ -44,6 +42,8 @@
     "type_font_h6": "subheading",
     "type_size_h6": "12",
     "type_line_height_h6": "display-loose",
+    "page_background_color": "{{ settings.color_palette.background }}",
+    "page_width": "narrow",
     "page_transition_enabled": false,
     "transition_to_main_product": false,
     "card_hover_effect": "none",
@@ -66,7 +66,8 @@
     "button_border_radius_secondary": 14,
     "cart_type": "drawer",
     "cart_price_font": "subheading",
-    "show_cart_note": false,
+    "show_cart_note": true,
+    "cart_note_open_by_default": false,
     "show_add_discount_code": true,
     "drawer_background_color": "{{ settings.color_palette.background }}",
     "drawer_text_color": "{{ settings.color_palette.foreground }}",
@@ -85,6 +86,7 @@
     "currency_code_enabled_product_pages": false,
     "currency_code_enabled_product_cards": false,
     "currency_code_enabled_cart_items": false,
+    "quick_add": false,
     "quick_add_background": "{{ settings.color_palette.background }}",
     "quick_add_text": "{{ settings.color_palette.foreground }}",
     "product_corner_radius": 0,
@@ -102,6 +104,27 @@
     "variant_button_border_width": 1,
     "variant_button_radius": 14,
     "variant_button_width": "equal-width-buttons",
+    "content_for_index": [],
+    "blocks": {
+      "1768834845299682660": {
+        "type": "shopify://apps/subscriptions/blocks/app-embed-block/a3bfe9ec-96f8-4508-a003-df608a36d2ad",
+        "disabled": false,
+        "settings": {
+          "color_text_title": "#6D7175",
+          "color_text_body": "#6D7175",
+          "dividers_color": "#8F8D8D",
+          "bacgkround_color": "#FFFFFF",
+          "border_thickness": 1,
+          "border_radius": 0,
+          "subscription_policy_url": ""
+        }
+      },
+      "1322372802649952684": {
+        "type": "shopify://apps/isourceit-test/blocks/floating-button/01a011c8-7904-7463-b85b-0a8db0094a01",
+        "disabled": false,
+        "settings": {}
+      }
+    },
     "color_palette": {
       "background": "#ffffff",
       "foreground": "#000000",

@@ -5,18 +5,14 @@ import { DrawerOpenEvent } from '@theme/theme-drawer';
 /**
  * A custom element that manages cart drawer behavior within a `<theme-drawer>`.
  *
- * Dialog lifecycle (open/close, squeeze, history, animations) is owned by `<theme-drawer>`.
- * The `cart:view` event is auto-dispatched by `CartItemsComponent` via the
- * `view-event-trigger="dialog"` attribute (see `snippets/cart-items-component.liquid`).
- * Cart count announcements are owned by `<header-actions>`.
- * This component handles the remaining cart-specific concerns: auto-open on add-to-cart,
- * sticky summary layout, and the installments CTA close-on-click.
- *
  * @extends {Component}
  */
 class CartDrawerComponent extends Component {
   /** @type {number} */
   #summaryThreshold = 0.5;
+  
+  /** @type {AbortController | null} */
+  #abortController = null;
 
   /** @type {import('@theme/theme-drawer').ThemeDrawer | null} */
   get #themeDrawer() {
@@ -32,10 +28,10 @@ class CartDrawerComponent extends Component {
     super.connectedCallback();
     document.addEventListener(StandardEvents.cartLinesUpdate, this.#handleCartLinesUpdate);
     this.#themeDrawer?.addEventListener(DrawerOpenEvent.eventName, this.#handleDrawerOpen);
+    
+    // Add delegated listener for selling plan dropdown changes
+    this.addEventListener('change', this.#handleSellingPlanChange);
 
-    // The restore path sets [open] before this module loads, so the
-    // theme-drawer:open event will have already fired. Use the attribute
-    // check so this works even before <theme-drawer> upgrades.
     if (this.#themeDrawer?.hasAttribute('open')) {
       this.#handleDrawerOpen();
     }
@@ -45,34 +41,115 @@ class CartDrawerComponent extends Component {
     super.disconnectedCallback();
     document.removeEventListener(StandardEvents.cartLinesUpdate, this.#handleCartLinesUpdate);
     this.#themeDrawer?.removeEventListener(DrawerOpenEvent.eventName, this.#handleDrawerOpen);
+    this.removeEventListener('change', this.#handleSellingPlanChange);
   }
 
   /**
-   * Handles the theme-drawer opening — updates sticky state and wires up the installments CTA.
+   * Handles selling plan dropdown changes, aborts rapid clicks, and re-renders only affected regions[cite: 1].
+   * @param {Event} event
    */
+  #handleSellingPlanChange = async (event) => {
+    const select = /** @type {HTMLSelectElement} */ (event.target);
+    
+    // Only intercept our specific subscription dropdowns
+    if (!select.classList.contains('cart-item__selling-plan-select')) return;
+
+    // The wrapper should contain the line item key and current quantity
+    const wrapper = select.closest('[data-line-key]');
+    if (!wrapper) return;
+
+    const lineKey = wrapper.getAttribute('data-line-key');
+    const quantity = wrapper.getAttribute('data-quantity');
+    const newSellingPlanId = select.value;
+
+    // Debounce: Abort previous in-flight requests if user clicks rapidly[cite: 1]
+    if (this.#abortController) {
+      this.#abortController.abort();
+    }
+    this.#abortController = new AbortController();
+
+    // Set UI to loading state
+    select.disabled = true;
+    const spinner = wrapper.querySelector('.cart-item__selling-plan-spinner');
+    if (spinner) spinner.removeAttribute('hidden');
+
+    try {
+      const sectionId = this.closest('.shopify-section')?.id.replace('shopify-section-', '') || 'cart-drawer';
+
+      // Use native Fetch instead of CartLinesUpdateEvent to strictly control partial DOM replacement[cite: 1]
+      const response = await fetch(`${window.Shopify?.routes?.root || '/'}cart/change.js`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        signal: this.#abortController.signal,
+        body: JSON.stringify({
+          id: lineKey,
+          quantity: quantity, 
+          selling_plan: newSellingPlanId || null,
+          sections: sectionId
+        })
+      });
+
+      if (!response.ok) throw new Error('Failed to update selling plan');
+
+      const state = await response.json();
+      const updatedSectionHtml = state.sections[sectionId];
+
+      if (updatedSectionHtml) {
+        const dom = new DOMParser().parseFromString(updatedSectionHtml, 'text/html');
+
+        // 1. Re-render ONLY the specific line item[cite: 1]
+        const currentLineItem = select.closest('.cart-item') || select.closest('tr');
+        if (currentLineItem && currentLineItem.id) {
+          const newLineItem = dom.getElementById(currentLineItem.id);
+          if (newLineItem) {
+            currentLineItem.innerHTML = newLineItem.innerHTML;
+          }
+        }
+
+        // 2. Re-render the summary/footer to reflect cart-level discount recalculations[cite: 1]
+        const currentSummary = this.querySelector('.cart-drawer__summary, .cart__footer');
+        if (currentSummary) {
+          // Identify the exact class or ID of the summary to find its match in the new DOM
+          const selector = currentSummary.id ? `#${currentSummary.id}` : `.${currentSummary.className.split(' ').join('.')}`;
+          const newSummary = dom.querySelector(selector);
+          
+          if (newSummary) {
+            currentSummary.innerHTML = newSummary.innerHTML;
+          }
+        }
+
+        // Ensure the drawer layout recalibrates after DOM injection
+        this.#updateStickyState();
+      }
+
+    } catch (error) {
+      if (error.name !== 'AbortError') {
+        console.error('[cart-drawer] Selling plan update error:', error);
+      }
+    } finally {
+      // Restore UI state only if a newer request hasn't overridden this one
+      if (!this.#abortController.signal.aborted) {
+        select.disabled = false;
+        if (spinner) spinner.setAttribute('hidden', '');
+      }
+    }
+  };
+
   #handleDrawerOpen = () => {
     this.#updateStickyState();
 
-    // Close cart drawer when installments CTA is clicked to avoid overlapping dialogs.
-    // Re-queried on every open so it survives cart content re-renders that
-    // replace the shopify-payment-terms shadow root.
     customElements.whenDefined('shopify-payment-terms').then(() => {
       const cta = this.querySelector('shopify-payment-terms')?.shadowRoot?.querySelector('#shopify-installments-cta');
       cta?.addEventListener('click', () => this.#themeDrawer?.close(), { once: true });
     });
   };
 
-  /**
-   * @param {import('@shopify/events').CartLinesUpdateEvent} event
-   */
   #handleCartLinesUpdate = (event) => {
     const shouldAutoOpen = this.hasAttribute('auto-open') && event.action === 'add' && !this.#themeDrawer?.isOpen;
 
-    // When the event originates inside an open MODAL <dialog> (e.g. quick-add),
-    // defer the auto-open until that dialog's native `close` fires so its focus
-    // restoration runs first — otherwise we'd capture the wrong
-    // `#previouslyFocused`. Non-modal dialogs (e.g. the hotspot preview) don't
-    // close on add and don't move focus, so `:modal` excludes them.
     const sourceModal = /** @type {HTMLDialogElement | null} */ (
       event.target instanceof Element ? event.target.closest('dialog:modal') : null
     );
@@ -114,12 +191,10 @@ class CartDrawerComponent extends Component {
     const dialog = this.#dialog;
     if (!dialog) return;
 
-    // Refs do not cross nested `*-component` boundaries (e.g., `cart-items-component`), so we query within the dialog.
     const content = dialog.querySelector('.cart-drawer__content');
     const summary = dialog.querySelector('.cart-drawer__summary');
 
     if (!content || !summary) {
-      // Ensure the dialog doesn't get stuck in "unsticky" mode when summary disappears (e.g., empty cart).
       dialog.setAttribute('cart-summary-sticky', 'false');
       return;
     }
@@ -128,6 +203,9 @@ class CartDrawerComponent extends Component {
     const summaryHeight = summary.getBoundingClientRect().height;
     const ratio = summaryHeight / drawerHeight;
     dialog.setAttribute('cart-summary-sticky', ratio > this.#summaryThreshold ? 'false' : 'true');
+    if(document.querySelector('.quick-view__dialog[open]')) {
+      document.querySelector('.quick-view__dialog[open]').close()
+    }
   }
 }
 

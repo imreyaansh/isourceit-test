@@ -39,15 +39,15 @@ export class CartItemsComponent extends createViewEventElement(Component) {
     },
     300
   );
+  
   /** @type {Promise<any> | null} */
   #pendingCartFetch = null;
 
+  /** @type {AbortController | null} */
+  #abortController = null;
+
   /**
-   * True when the event was dispatched from outside this cart-items-component (e.g.
-   * `Shopify.actions.updateCart(...)` from an external app, or the SFAPI default
-   * handler). Internal dispatchers (cart-discount-component, cart-note) live inside
-   * `this` and either morph the section themselves or don't need a refresh — running
-   * a fallback render in that case double-renders and can clobber form state.
+   * True when the event was dispatched from outside this cart-items-component.
    * @param {Event} event
    */
   #isExternalCartUpdate(event) {
@@ -64,9 +64,6 @@ export class CartItemsComponent extends createViewEventElement(Component) {
           morphSection(this.sectionId, sectionsHtml, { mode: this.isDrawer ? 'hydration' : 'full' });
           this.#updateCartQuantitySelectorButtonStates();
         } else if (external) {
-          // External caller (Shopify.actions.updateCart or SFAPI default handler) didn't
-          // attach sections; refetch so the discount UI reflects the post-mutation cart.
-          // Internal cart-discount-component morphs the section itself — no fallback needed.
           sectionRenderer.renderSection(this.sectionId, {
             cache: false,
             mode: this.isDrawer ? 'hydration' : 'full',
@@ -80,8 +77,6 @@ export class CartItemsComponent extends createViewEventElement(Component) {
 
   /** @param {CartNoteUpdateEvent} event */
   #handleNoteUpdate = (event) => {
-    // Internal cart-note dispatches don't need a section refresh — the user typed the
-    // value and the textarea retains it. Only external callers need the UI synced.
     if (!this.#isExternalCartUpdate(event)) return;
     event.promise
       ?.then(({ detail }) => {
@@ -108,6 +103,9 @@ export class CartItemsComponent extends createViewEventElement(Component) {
     document.addEventListener(ThemeEvents.quantitySelectorUpdate, this.#debouncedOnChange);
     document.addEventListener(StandardEvents.cartDiscountUpdate, this.#handleDiscountUpdate);
     document.addEventListener(StandardEvents.cartNoteUpdate, this.#handleNoteUpdate);
+    
+    // Listen for selling plan changes natively within the component[cite: 4]
+    this.addEventListener('change', this.#handleSellingPlanChange);
   }
 
   disconnectedCallback() {
@@ -117,6 +115,145 @@ export class CartItemsComponent extends createViewEventElement(Component) {
     document.removeEventListener(ThemeEvents.quantitySelectorUpdate, this.#debouncedOnChange);
     document.removeEventListener(StandardEvents.cartDiscountUpdate, this.#handleDiscountUpdate);
     document.removeEventListener(StandardEvents.cartNoteUpdate, this.#handleNoteUpdate);
+    
+    this.removeEventListener('change', this.#handleSellingPlanChange);
+  }
+
+  /**
+   * Handles selling plan dropdown changes, triggering the update process[cite: 4].
+   * @param {Event} event - The change event.
+   */
+  #handleSellingPlanChange = (event) => {
+    const select = /** @type {HTMLSelectElement} */ (event.target);
+    if (!select.classList.contains('cart-item__selling-plan-select')) return;
+
+    // Find the cart item row which stores the line item key[cite: 4]
+    const row = select.closest('[data-key]');
+    if (!row) return;
+
+    const lineId = row.getAttribute('data-key');
+    if (!lineId) return;
+
+    // Ensure we send the current quantity to preserve it[cite: 4]
+    const quantityInput = /** @type {HTMLInputElement | null} */ (row.querySelector('input[name="quantity"]'));
+    const quantity = quantityInput ? parseInt(quantityInput.value, 10) : 1;
+    const sellingPlan = select.value;
+
+    this.updateSellingPlan({ id: lineId, quantity, sellingPlan, select });
+  };
+
+  /**
+   * Updates the selling plan for a cart line item utilizing Horizon's native morph capabilities[cite: 4].
+   * @param {Object} config
+   * @param {string} config.id - The line item key.
+   * @param {number} config.quantity - The current quantity.
+   * @param {string} config.sellingPlan - The new selling plan ID.
+   * @param {HTMLSelectElement} config.select - The dropdown element.
+   */
+  updateSellingPlan({ id, quantity, sellingPlan, select }) {
+    // Abort rapid clicks to prevent cart corruption[cite: 4]
+    if (this.#abortController) {
+      this.#abortController.abort();
+    }
+    this.#abortController = new AbortController();
+
+    const cartPerformaceUpdateMarker = cartPerformance.createStartingMarker(`update:user-action`);
+    this.#disableCartItems();
+    const { cartTotal } = this.refs;
+
+    const cartItemsComponents = document.querySelectorAll('cart-items-component');
+    const sectionsToUpdate = new Set([this.sectionId]);
+    cartItemsComponents.forEach((item) => {
+      if (item instanceof HTMLElement && item.dataset.sectionId) {
+        sectionsToUpdate.add(item.dataset.sectionId);
+      }
+    });
+
+    const body = JSON.stringify({
+      id,
+      quantity,
+      selling_plan: sellingPlan || null,
+      sections: Array.from(sectionsToUpdate).join(','),
+      sections_url: window.location.pathname,
+    });
+
+    cartTotal?.shimmer();
+    select.disabled = true;
+
+    const deferredUpdatePromise = CartLinesUpdateEvent.createPromise();
+    this.dispatchEvent(
+      new CartLinesUpdateEvent({
+        action: 'update',
+        context: 'cart',
+        lines: [{ id, quantity }],
+        promise: deferredUpdatePromise.promise,
+      })
+    );
+
+    // Fetch using Horizon's native fetchConfig and pass the AbortSignal[cite: 4]
+    fetch(`${Theme.routes.cart_change_url}`, {
+      ...fetchConfig('json', { body }),
+      signal: this.#abortController.signal
+    })
+      .then((response) => response.text())
+      .then((responseText) => {
+        const parsedResponseText = JSON.parse(responseText);
+        resetShimmer(this);
+
+        if (parsedResponseText.errors) {
+          deferredUpdatePromise.reject(new Error(parsedResponseText.errors));
+          return;
+        }
+
+        const newSectionHTML = new DOMParser().parseFromString(
+          parsedResponseText.sections[this.sectionId],
+          'text/html'
+        );
+
+        const newCartHiddenItemCount = newSectionHTML.querySelector('[ref="cartItemCount"]')?.textContent;
+        const newCartItemCount = newCartHiddenItemCount ? parseInt(newCartHiddenItemCount, 10) : 0;
+
+        this.#updateQuantitySelectors(parsedResponseText);
+
+        deferredUpdatePromise.resolve({
+          cart: CartLinesUpdateEvent.createCartFromAjaxResponse(parsedResponseText),
+          detail: {
+            sections: parsedResponseText.sections,
+            items: parsedResponseText.items,
+            itemCount: newCartItemCount,
+            source: 'cart-items-component',
+            didError: false,
+          },
+        });
+
+        // Use morphSection to surgically replace ONLY the affected line item and totals[cite: 4]
+        morphSection(this.sectionId, parsedResponseText.sections[this.sectionId], {
+          mode: this.isDrawer ? 'hydration' : 'full',
+        });
+
+        this.#updateCartQuantitySelectorButtonStates();
+      })
+      .catch((error) => {
+        // Ignore aborted errors from rapid clicks[cite: 4]
+        if (error.name === 'AbortError') return;
+        
+        console.error(error);
+        deferredUpdatePromise.reject(error);
+        this.dispatchEvent(
+          new CartErrorEvent({
+            error: error?.message || 'Failed to update selling plan',
+            code: 'SERVICE_UNAVAILABLE',
+          })
+        );
+      })
+      .finally(() => {
+        // Only enable if the request wasn't overridden by a newer one[cite: 4]
+        if (!this.#abortController?.signal.aborted) {
+          this.#enableCartItems();
+          select.disabled = false;
+          cartPerformance.measureFromMarker(cartPerformaceUpdateMarker);
+        }
+      });
   }
 
   /**
@@ -127,8 +264,6 @@ export class CartItemsComponent extends createViewEventElement(Component) {
     if (!(event.target instanceof Node) || !this.contains(event.target)) return;
 
     const { quantity, cartLine: line } = event.detail;
-
-    // Cart items require a line number
     if (!line) return;
 
     if (quantity === 0) {
@@ -160,19 +295,16 @@ export class CartItemsComponent extends createViewEventElement(Component) {
     });
 
     const cartItemRowToRemove = this.refs.cartItemRows[line - 1];
-
     if (!cartItemRowToRemove) return;
 
     const rowsToRemove = [
       cartItemRowToRemove,
-      // Get all nested lines of the row to remove
       ...this.refs.cartItemRows.filter((row) => row.dataset.parentKey === cartItemRowToRemove.dataset.key),
     ];
 
-    // If the cart item row is the last row, optimistically trigger the cart empty state
     const isEmptyCart = rowsToRemove.length == this.refs.cartItemRows.length;
-
     const template = document.getElementById('empty-cart-template');
+    
     if (isEmptyCart && template instanceof HTMLTemplateElement) {
       const clone = document.importNode(template.content, true);
 
@@ -184,16 +316,12 @@ export class CartItemsComponent extends createViewEventElement(Component) {
       return;
     }
 
-    // Add class to the row to trigger the animation
     rowsToRemove.forEach((row) => {
       const remove = () => row.remove();
-
       if (prefersReducedMotion()) return remove();
 
       row.style.setProperty('--row-height', `${row.clientHeight}px`);
       row.classList.add('removing');
-
-      // Remove the row after the animation ends
       onAnimationEnd(row, remove);
     });
   }
@@ -242,9 +370,7 @@ export class CartItemsComponent extends createViewEventElement(Component) {
     );
 
     fetch(`${Theme.routes.cart_change_url}`, fetchConfig('json', { body }))
-      .then((response) => {
-        return response.text();
-      })
+      .then((response) => response.text())
       .then((responseText) => {
         const parsedResponseText = JSON.parse(responseText);
 
@@ -261,11 +387,9 @@ export class CartItemsComponent extends createViewEventElement(Component) {
           'text/html'
         );
 
-        // Grab the new cart item count from a hidden element
         const newCartHiddenItemCount = newSectionHTML.querySelector('[ref="cartItemCount"]')?.textContent;
         const newCartItemCount = newCartHiddenItemCount ? parseInt(newCartHiddenItemCount, 10) : 0;
 
-        // Update data-cart-quantity for all matching variants
         this.#updateQuantitySelectors(parsedResponseText);
 
         deferredUpdatePromise.resolve({
@@ -345,9 +469,6 @@ export class CartItemsComponent extends createViewEventElement(Component) {
       ?.then(async ({ detail }) => {
         const sections = detail?.sections;
         const cartItemsHtml = sections?.[this.sectionId];
-        // Animate empty → non-empty in the drawer (possible in squeeze mode
-        // where the page is interactive alongside the open drawer). This also
-        // needs the response stylesheet because it adds the cart summary markup.
         const wasEmptyCartDrawer = this.isDrawer && this.querySelector('[data-cart-drawer-empty]') !== null;
         /** @type {'hydration' | 'full'} */
         const mode = this.isDrawer ? 'hydration' : 'full';
@@ -367,7 +488,6 @@ export class CartItemsComponent extends createViewEventElement(Component) {
             await morphSection(this.sectionId, cartItemsHtml, morphOptions);
           }
 
-          // Animate newly added rows (reverse of the remove animation).
           if (!wasEmptyCartDrawer && !prefersReducedMotion()) {
             for (const row of this.refs.cartItemRows ?? []) {
               if (!existingKeys.has(row.dataset.key)) {
@@ -377,7 +497,6 @@ export class CartItemsComponent extends createViewEventElement(Component) {
             }
           }
 
-          // Update button states for all cart quantity selectors after morph
           this.#updateCartQuantitySelectorButtonStates();
         } else {
           sectionRenderer.renderSection(this.sectionId, { cache: false, ...morphOptions });
@@ -420,7 +539,6 @@ export class CartItemsComponent extends createViewEventElement(Component) {
 
         input.setAttribute('data-cart-quantity', item.quantity.toString());
 
-        // Update the quantity selector's internal state
         if ('updateCartQuantity' in selector && typeof selector.updateCartQuantity === 'function') {
           selector.updateCartQuantity();
         }

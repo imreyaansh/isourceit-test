@@ -7,7 +7,6 @@
 
 {% render 'text-component-shimmer-styles' %}
 {% render 'cart-typography-styles' %}
-
 <div class="cart-totals">
   {% # We need to keep this node in place to allow morphing to work properly # %}
   <div class="cart-totals__original-container cart-primary-typography">
@@ -40,9 +39,11 @@
       </ul>
     {%- endif -%}
   </div>
-
   {% if settings.show_cart_note or settings.show_add_discount_code %}
     <div class="cart-actions">
+      {% if settings.show_cart_note and settings.show_add_discount_code %}
+        <div class="cart-actions__divider"></div>
+      {% endif %}
       {% if settings.show_cart_note %}
         <script
           type="module"

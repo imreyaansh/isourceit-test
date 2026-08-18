@@ -1,0 +1,155 @@
+{% comment %}
+  Block: Sticky Add to Cart (Native Horizon Proxy)
+  Reads directly from the main product-form-component state layer.
+{% endcomment %}
+{% liquid
+  assign product = closest.product
+-%}
+{%- if product -%}
+  {{ 'sticky-add-to-cart.css' | asset_url | stylesheet_tag }}  
+  <sticky-add-to-cart class="sticky-bar" hidden>
+    <div class="sticky-bar__container">
+      <div class="sticky-bar__info">
+        <span class="sticky-bar__title">{{ product.title }}</span>
+        <span class="sticky-bar__price" data-sticky-price>
+          {{ product.selected_or_first_available_variant.price | money }}
+        </span>
+      </div>
+      
+      <div class="sticky-bar__actions">
+        <button 
+          type="button" 
+          class="button button--primary sticky-bar__btn" 
+          data-sticky-btn
+          {% unless product.selected_or_first_available_variant.available %}disabled{% endunless %}
+        >
+          <span data-sticky-btn-text>
+            {% if product.selected_or_first_available_variant.available %}
+              {{ 'products.product.add_to_cart' | t | default: 'Add to cart' }}
+            {% else %}
+              {{ 'products.product.sold_out' | t | default: 'Sold out' }}
+            {% endif %}
+          </span>
+        </button>
+      </div>
+    </div>
+  </sticky-add-to-cart>
+  <script>
+    if (!customElements.get('sticky-add-to-cart')) {
+      class StickyAddToCart extends HTMLElement {
+        connectedCallback() {
+          this.btn = this.querySelector('[data-sticky-btn]');
+          this.btnText = this.querySelector('[data-sticky-btn-text]');
+          this.priceTarget = this.querySelector('[data-sticky-price]');
+          
+          // Wait a brief moment to ensure the main product form is rendered in the DOM
+          setTimeout(() => this.connectToMainForm(), 100);
+        }
+
+        disconnectedCallback() {
+          if (this.btnObserver) this.btnObserver.disconnect();
+          if (this.priceObserver) this.priceObserver.disconnect();
+          if (this.visibilityObserver) this.visibilityObserver.disconnect();
+        }
+
+        connectToMainForm() {
+          // 1. Locate Horizon's native product form component
+          this.mainForm = document.querySelector('product-form-component');
+          if (!this.mainForm) return;
+
+          // Locate the native add to cart button inside Horizon's add-to-cart-component
+          this.mainBtn = this.mainForm.querySelector('button[name="add"], button[type="submit"]');
+          
+          if (this.btn && this.mainBtn) {
+            // 2. Delegate Clicks
+            this.btn.addEventListener('click', (e) => {
+              e.preventDefault();
+              if (!this.mainBtn.disabled) {
+                this.mainBtn.click();
+              }
+            });
+
+            // 3. Sync State Natively
+            this.btnObserver = new MutationObserver((mutations) => {
+              mutations.forEach((mutation) => {
+                if (mutation.type === 'attributes' && mutation.attributeName === 'disabled') {
+                  this.btn.disabled = this.mainBtn.disabled;
+                }
+                if (mutation.type === 'childList' || mutation.type === 'characterData') {
+                  const text = this.mainBtn.textContent.trim();
+                  if (text) this.btnText.textContent = text;
+                }
+              });
+            });
+            
+            this.btnObserver.observe(this.mainBtn, { 
+              attributes: true, 
+              childList: true, 
+              characterData: true, 
+              subtree: true 
+            });
+
+            // 4. Robust Visibility Trigger (Replaces window.scrollY)
+            this.visibilityObserver = new IntersectionObserver((entries) => {
+              entries.forEach(entry => {
+                // If the main Add to Cart button is NOT visible on the screen
+                if (!entry.isIntersecting) {
+                  this.removeAttribute('hidden');
+                  // Use requestAnimationFrame to ensure the display transition works
+                  requestAnimationFrame(() => this.classList.add('is-visible'));
+                } else {
+                  // If the main Add to Cart button IS visible
+                  this.classList.remove('is-visible');
+                  setTimeout(() => {
+                    if (!this.classList.contains('is-visible')) {
+                      this.setAttribute('hidden', '');
+                    }
+                  }, 300);
+                }
+              });
+            }, { 
+              // 0 means it triggers as soon as the element is completely out of view
+              threshold: 0,
+              // Offset slightly so it triggers just before it fully leaves the screen
+              rootMargin: '0px 0px -50px 0px' 
+            });
+
+            this.visibilityObserver.observe(this.mainBtn);
+          }
+
+          // 5. Sync Price Element Natively
+          this.mainPrice = document.querySelector('price-per-item, .price-item--regular');
+          if (this.mainPrice && this.priceTarget) {
+            this.priceObserver = new MutationObserver(() => {
+              this.priceTarget.innerHTML = this.mainPrice.innerHTML;
+            });
+            this.priceObserver.observe(this.mainPrice, { 
+              childList: true, 
+              characterData: true, 
+              subtree: true 
+            });
+          }
+        }
+      }
+      
+      customElements.define('sticky-add-to-cart', StickyAddToCart);
+    }
+  </script>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "Sticky Add to Cart",
+  "settings": [],
+  "blocks": [
+    {
+      "type": "@theme"
+    }
+  ],
+  "presets": [
+    {
+      "name": "Sticky Add to Cart"
+    }
+  ]
+}
+{% endschema %}

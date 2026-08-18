@@ -6,7 +6,8 @@
  * or related systems. Please exercise caution as any changes
  * made to this file may be overwritten.
  * ------------------------------------------------------------
- */{
+ */
+{
   "sections": {
     "main": {
       "type": "product-information",
@@ -30,6 +31,12 @@
           },
           "blocks": {}
         },
+        "sticky_add_to_cart_tbGQaM": {
+          "type": "sticky-add-to-cart",
+          "name": "Sticky Add to Cart",
+          "settings": {},
+          "blocks": {}
+        },
         "media-gallery": {
           "type": "_product-media-gallery",
           "static": true,
@@ -38,6 +45,7 @@
             "media_columns": "two",
             "image_gap": 4,
             "large_first_image": false,
+            "icons_style": "arrow",
             "slideshow_controls_style": "counter",
             "slideshow_mobile_controls_style": "dots",
             "thumbnail_position": "right",
@@ -116,6 +124,7 @@
                 "border_opacity": 100,
                 "border_color": "",
                 "border_radius": 0,
+                "link": "",
                 "open_in_new_tab": false,
                 "placeholder": "",
                 "padding-block-start": 0,
@@ -213,6 +222,35 @@
               },
               "blocks": {}
             },
+            "isourceit_test_size_guide_gR6mtV": {
+              "type": "shopify://apps/isourceit-test/blocks/size-guide/01a011c8-7904-7463-b85b-0a8db0094a01",
+              "settings": {
+                "button_label": "View Size Guide",
+                "heading": "Clothing Size Chart"
+              }
+            },
+            "dynamic_stitch_WiKY4L": {
+              "type": "dynamic-stitch",
+              "name": "Dynamic Stitch",
+              "settings": {
+                "products": "{{ metaobjects.stitch_group.snowboard.list_of_products.value }}"
+              },
+              "blocks": {}
+            },
+            "subscriptions_app_block_CwL7jg": {
+              "type": "shopify://apps/subscriptions/blocks/app-block/a3bfe9ec-96f8-4508-a003-df608a36d2ad",
+              "settings": {
+                "widget_style": "card",
+                "widget_style_card_selector": "dropdown",
+                "subscription_policy_url": "",
+                "color_text_body": "#6d7175",
+                "dividers_color": "#8f8d8d",
+                "background_color": "#ffffff",
+                "border_thickness": 1,
+                "border_radius": 0,
+                "product": "{{closest.product}}"
+              }
+            },
             "buy_buttons_eYQEYi": {
               "type": "buy-buttons",
               "settings": {
@@ -304,13 +342,17 @@
             "group_icgrde",
             "divider_VJhene",
             "variant_picker_R3rGDr",
+            "isourceit_test_size_guide_gR6mtV",
+            "dynamic_stitch_WiKY4L",
+            "subscriptions_app_block_CwL7jg",
             "buy_buttons_eYQEYi",
             "text_aEtTtq"
           ]
         }
       },
       "block_order": [
-        "disclosures_g9mWze"
+        "disclosures_g9mWze",
+        "sticky_add_to_cart_tbGQaM"
       ],
       "settings": {
         "content_width": "content-center-aligned",
@@ -318,7 +360,7 @@
         "equal_columns": false,
         "limit_details_width": false,
         "gap": 48,
-        "enable_sticky_add_to_cart": true,
+        "enable_sticky_add_to_cart": false,
         "background_color": "{{ settings.color_palette.background }}",
         "padding-block-start": 0,
         "padding-block-end": 0
@@ -434,12 +476,22 @@
                 "padding-inline-end": 0
               },
               "blocks": {}
+            },
+            "quick_add_button_BmkUEg": {
+              "type": "quick-add-button",
+              "name": "Quick view button",
+              "settings": {
+                "button_label": "Quick view",
+                "desktop_width_percent": 100
+              },
+              "blocks": {}
             }
           },
           "block_order": [
             "product_card_gallery_DNizbJ",
             "product_title_M7MJkb",
-            "price_gLWgA6"
+            "price_gLWgA6",
+            "quick_add_button_BmkUEg"
           ]
         }
       },

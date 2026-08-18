@@ -1,0 +1,45 @@
+{%- comment -%}
+  Task 1.5: Cart Drawer Custom Upsell
+  Zero CLS structure with product recommendation container.
+{%- endcomment -%}
+
+{%- if cart.items.size > 0 -%}
+  {%- assign last_item = cart.items.first -%}
+  {% unless last_item.product.metafields.custom.upsell_product.value %}
+    {% for item in cart.items %}
+      {%- if item.product.metafields.custom.upsell_product.value -%}
+        {%- assign last_item = item -%}
+        {%- break -%}
+      {%- endif -%}
+    {% endfor %}
+  {% endunless %}
+  {%- if last_item.product.metafields.custom.upsell_product.value -%}
+    {{ 'cart-drawer-upsell.css' | asset_url | stylesheet_tag }} 
+    <cart-drawer-upsell class="cart-drawer-upsell block-spacing"  data-section-id="{{ section.id }}">
+      <div class="cart-drawer-upsell__container" style="min-height: 100px;">
+        <div class="cart-drawer-upsell__content" ref="upsellContent">
+          {%- assign upsell_products = last_item.product.metafields.custom.upsell_product.value -%}
+          {% for upsell_product in upsell_products %}
+            <div class="cart-drawer-upsell__card">
+              <img 
+                src="{{ upsell_product.featured_image | image_url: width: 150 }}" 
+                alt="{{ upsell_product.title }}" 
+                width="75" 
+                height="75" 
+                loading="lazy"
+                class="cart-drawer-upsell__image"
+              >
+              <div class="cart-drawer-upsell__info">
+                <span class="cart-drawer-upsell__product-title">{{ upsell_product.title }}</span>
+                <span class="cart-drawer-upsell__price">{{ upsell_product.price | money }}</span>
+                <!-- REUSE CODE PATH: Opens Quick View / Quick Add Modal matching Task 1.1 -->
+                {% render 'quick-add-button', product: upsell_product %}
+              </div>
+              
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    </cart-drawer-upsell>
+  {%- endif -%}
+{%- endif -%}

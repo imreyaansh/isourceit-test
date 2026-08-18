@@ -1,0 +1,63 @@
+{% comment %}
+  Task 1.4: Dynamic Stitch Product
+  Metaobject-driven product swapper.
+{% endcomment %}
+
+{%- if product.metafields.custom.stitch_group.value != blank -%}
+  {{ 'dynamic-stitch.css' | asset_url | stylesheet_tag }} 
+<dynamic-stitch class="stitch-selector block-spacing">
+  <div class="stitch-selector__header">
+    <span class="stitch-selector__label">Style:</span>
+    <span class="stitch-selector__current">{{ product.title }}</span>
+  </div>
+  
+  <div class="stitch-selector__swatches">
+    {% comment %} 
+      Performance Constraint: Handle 30+ products. 
+      We only render lightweight links and thumbnails, NOT full product forms. 
+    {% endcomment %}
+    {%- for sibling in block.settings.products -%}
+      <a 
+        href="{{ sibling.url }}"
+        class="stitch-selector__swatch {% if sibling.handle == product.handle %}is-active{% endif %}"
+        data-stitch-url="{{ sibling.url }}"
+        aria-label="Switch to {{ sibling.title }}"
+        title="{{ sibling.title }}"
+      >
+        <img 
+          src="{{ sibling.featured_image | image_url: width: 120 }}" 
+          alt="{{ sibling.title }}" 
+          loading="lazy" 
+          width="60" 
+          height="60"
+          class="stitch-selector__image"
+        >
+        <span class="spinner stitch-selector__spinner" hidden></span>
+      </a>
+    {%- endfor -%}
+  </div>
+</dynamic-stitch>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "Dynamic Stitch",
+  "settings": [
+    {
+      "type": "product_list",
+      "id": "products",
+      "label": "Stitch products"
+    }
+  ],
+  "blocks": [
+    {
+      "type": "@theme"
+    }
+  ],
+  "presets": [
+    {
+      "name": "Dynamic Stitch"
+    }
+  ]
+}
+{% endschema %}
