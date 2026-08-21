@@ -233,7 +233,10 @@
               "type": "dynamic-stitch",
               "name": "Dynamic Stitch",
               "settings": {
-                "products": []
+                "products": [
+                  "the-out-of-stock-snowboard",
+                  "the-videographer-snowboard"
+                ]
               },
               "blocks": {}
             },
