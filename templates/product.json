@@ -233,12 +233,7 @@
               "type": "dynamic-stitch",
               "name": "Dynamic Stitch",
               "settings": {
-                "products": [
-                  "selling-plans-ski-wax",
-                  "the-collection-snowboard-hydrogen",
-                  "the-collection-snowboard-liquid",
-                  "the-compare-at-price-snowboard"
-                ]
+                "products": []
               },
               "blocks": {}
             },
