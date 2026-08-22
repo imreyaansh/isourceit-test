@@ -209,8 +209,7 @@
               "type": "quick-add-button",
               "name": "Quick view button",
               "settings": {
-                "button_label": "Quick view",
-                "desktop_width_percent": 100
+                "button_label": "Quick view"
               },
               "blocks": {}
             }
