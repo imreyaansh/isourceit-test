@@ -67,7 +67,7 @@
 <quick-view class="quick-view" data-product-url="{{ product.url }}" {{ block.shopify_attributes }}>
   {% if product != blank %}
     <button type="button" class="quick-view__button" aria-haspopup="dialog" aria-controls="quick-view-dialog-{{ block.id }}">
-      {{ block.settings.button_label | default: 'Quick view' }}
+      {{ 'blocks.quick_add_button.quick_view' | t | default: 'Quick view' }}
     </button>
 
     <dialog id="quick-view-dialog-{{ block.id }}" class="quick-view__dialog" aria-labelledby="quick-view-title-{{ block.id }}">
@@ -75,7 +75,7 @@
       
       <!-- Target div where the fetched <product-component> will be injected -->
       <div class="quick-view__content-target">
-        <div class="quick-view__loading">Loading...</div>
+        <div class="quick-view__loading">{{ 'blocks.quick_add_button.loading' | t | default: 'Loading...' }}</div>
       </div>
     </dialog>
   {% endif %}

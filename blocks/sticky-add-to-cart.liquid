@@ -7,13 +7,16 @@
 -%}
 {%- if product -%}
   {{ 'sticky-add-to-cart.css' | asset_url | stylesheet_tag }}  
-  <sticky-add-to-cart class="sticky-bar" hidden>
+  <sticky-add-to-cart class="sticky-bar" hidden {{ block.shopify_attributes }}>
     <div class="sticky-bar__container">
       <div class="sticky-bar__info">
         <span class="sticky-bar__title">{{ product.title }}</span>
-        <span class="sticky-bar__price" data-sticky-price>
-          {{ product.selected_or_first_available_variant.price | money }}
-        </span>
+        <div class="sticky-bar__price" data-sticky-price>
+          {% render 'price',
+          show_unit_price: true,
+          show_sale_price_first: false,
+          product_resource: product  %}
+        </div>
       </div>
       
       <div class="sticky-bar__actions">
@@ -25,9 +28,9 @@
         >
           <span data-sticky-btn-text>
             {% if product.selected_or_first_available_variant.available %}
-              {{ 'products.product.add_to_cart' | t | default: 'Add to cart' }}
+              {{ 'blocks.sticky_add_to_cart.add_to_cart' | t | default: 'Add to cart' }}
             {% else %}
-              {{ 'products.product.sold_out' | t | default: 'Sold out' }}
+              {{ 'blocks.sticky_add_to_cart.sold_out' | t | default: 'Sold out' }}
             {% endif %}
           </span>
         </button>
@@ -35,105 +38,107 @@
     </div>
   </sticky-add-to-cart>
   <script>
-    if (!customElements.get('sticky-add-to-cart')) {
-      class StickyAddToCart extends HTMLElement {
-        connectedCallback() {
-          this.btn = this.querySelector('[data-sticky-btn]');
-          this.btnText = this.querySelector('[data-sticky-btn-text]');
-          this.priceTarget = this.querySelector('[data-sticky-price]');
-          
-          // Wait a brief moment to ensure the main product form is rendered in the DOM
-          setTimeout(() => this.connectToMainForm(), 100);
-        }
+    class StickyAddToCart extends HTMLElement {
+      connectedCallback() {
+        this.btn = this.querySelector('[data-sticky-btn]');
+        this.btnText = this.querySelector('[data-sticky-btn-text]');
+        this.priceTarget = this.querySelector('[data-sticky-price]');
+        
+        // Wait a brief moment to ensure the main product form is rendered in the DOM
+        setTimeout(() => this.connectToMainForm(), 100);
+      }
 
-        disconnectedCallback() {
-          if (this.btnObserver) this.btnObserver.disconnect();
-          if (this.priceObserver) this.priceObserver.disconnect();
-          if (this.visibilityObserver) this.visibilityObserver.disconnect();
-        }
+      disconnectedCallback() {
+        if (this.btnObserver) this.btnObserver.disconnect();
+        if (this.priceObserver) this.priceObserver.disconnect();
+        if (this.visibilityObserver) this.visibilityObserver.disconnect();
+      }
 
-        connectToMainForm() {
-          // 1. Locate Horizon's native product form component
-          this.mainForm = document.querySelector('product-form-component');
-          if (!this.mainForm) return;
-
-          // Locate the native add to cart button inside Horizon's add-to-cart-component
-          this.mainBtn = this.mainForm.querySelector('button[name="add"], button[type="submit"]');
-          
-          if (this.btn && this.mainBtn) {
-            // 2. Delegate Clicks
-            this.btn.addEventListener('click', (e) => {
-              e.preventDefault();
-              if (!this.mainBtn.disabled) {
-                this.mainBtn.click();
-              }
-            });
-
-            // 3. Sync State Natively
-            this.btnObserver = new MutationObserver((mutations) => {
-              mutations.forEach((mutation) => {
-                if (mutation.type === 'attributes' && mutation.attributeName === 'disabled') {
-                  this.btn.disabled = this.mainBtn.disabled;
-                }
-                if (mutation.type === 'childList' || mutation.type === 'characterData') {
-                  const text = this.mainBtn.textContent.trim();
-                  if (text) this.btnText.textContent = text;
-                }
-              });
-            });
-            
-            this.btnObserver.observe(this.mainBtn, { 
-              attributes: true, 
-              childList: true, 
-              characterData: true, 
-              subtree: true 
-            });
-
-            // 4. Robust Visibility Trigger (Checks if element crossed the TOP of the viewport)
-            this.visibilityObserver = new IntersectionObserver((entries) => {
-              entries.forEach(entry => {
-                // Check if the element is fully out of view AND its top edge is above the viewport
-                const isPastTop = entry.boundingClientRect.top < 0;
-
-                if (!entry.isIntersecting && isPastTop) {
-                  this.removeAttribute('hidden');
-                  // Use requestAnimationFrame to ensure the display transition works
-                  requestAnimationFrame(() => this.classList.add('is-visible'));
-                } else {
-                  // Hide if it is visible on screen OR if it is below the viewport
-                  this.classList.remove('is-visible');
-                  setTimeout(() => {
-                    if (!this.classList.contains('is-visible')) {
-                      this.setAttribute('hidden', '');
-                    }
-                  }, 300);
-                }
-              });
-            }, { 
-              // 0 means it triggers as soon as the element crosses the boundary completely
-              threshold: 0 
-            });
-
-            this.visibilityObserver.observe(this.mainBtn);
-          }
-
-          // 5. Sync Price Element Natively
-          this.mainPrice = document.querySelector('price-per-item, .price-item--regular');
-          if (this.mainPrice && this.priceTarget) {
-            this.priceObserver = new MutationObserver(() => {
-              this.priceTarget.innerHTML = this.mainPrice.innerHTML;
-            });
-            this.priceObserver.observe(this.mainPrice, { 
-              childList: true, 
-              characterData: true, 
-              subtree: true 
-            });
-          }
+      updatePrice() {
+        // 5. Sync Price Element Natively
+        this.mainPrice = document.querySelector('product-component product-price');
+        if (this.mainPrice && this.priceTarget) {
+          this.priceObserver = new MutationObserver(() => {
+            this.priceTarget.innerHTML = this.mainPrice.innerHTML;
+          });
+          this.priceObserver.observe(this.mainPrice, { 
+            childList: true, 
+            characterData: true, 
+            subtree: true 
+          });
         }
       }
-      
-      customElements.define('sticky-add-to-cart', StickyAddToCart);
+
+      connectToMainForm() {
+        // 1. Locate Horizon's native product form component
+        this.mainForm = document.querySelector('product-form-component');
+        if (!this.mainForm) return;
+
+        // Locate the native add to cart button inside Horizon's add-to-cart-component
+        this.mainBtn = this.mainForm.querySelector('button[name="add"], button[type="submit"]');
+        
+        if (this.btn && this.mainBtn) {
+          // 2. Delegate Clicks
+          this.btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (!this.mainBtn.disabled) {
+              this.mainBtn.click();
+            }
+          });
+
+          // 3. Sync State Natively
+          this.btnObserver = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+              if (mutation.type === 'attributes' && mutation.attributeName === 'disabled') {
+                this.btn.disabled = this.mainBtn.disabled;
+              }
+              if (mutation.type === 'childList' || mutation.type === 'characterData') {
+                const text = this.mainBtn.textContent.trim();
+                if (text) this.btnText.textContent = text;
+              }
+            });
+          });
+          
+          this.btnObserver.observe(this.mainBtn, { 
+            attributes: true, 
+            childList: true, 
+            characterData: true, 
+            subtree: true 
+          });
+
+          // 4. Robust Visibility Trigger (Checks if element crossed the TOP of the viewport)
+          this.visibilityObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+              // Check if the element is fully out of view AND its top edge is above the viewport
+              const isPastTop = entry.boundingClientRect.top < 0;
+
+              if (!entry.isIntersecting && isPastTop) {
+                this.removeAttribute('hidden');
+                // Use requestAnimationFrame to ensure the display transition works
+                requestAnimationFrame(() => this.classList.add('is-visible'));
+              } else {
+                // Hide if it is visible on screen OR if it is below the viewport
+                this.classList.remove('is-visible');
+                setTimeout(() => {
+                  if (!this.classList.contains('is-visible')) {
+                    this.setAttribute('hidden', '');
+                  }
+                }, 300);
+              }
+            });
+          }, { 
+            // 0 means it triggers as soon as the element crosses the boundary completely
+            threshold: 0 
+          });
+
+          this.visibilityObserver.observe(this.mainBtn);
+        }
+
+        this.updatePrice();
+      }
     }
+    
+    customElements.define('sticky-add-to-cart', StickyAddToCart);
   </script>
 {%- endif -%}
 

@@ -5,9 +5,9 @@
 
 {%- if product.metafields.custom.stitch_group.value != blank -%}
   {{ 'dynamic-stitch.css' | asset_url | stylesheet_tag }} 
-<dynamic-stitch class="stitch-selector block-spacing">
+<dynamic-stitch class="stitch-selector block-spacing" {{ block.shopify_attributes }}>
   <div class="stitch-selector__header">
-    <span class="stitch-selector__label">Options:</span>
+    <span class="stitch-selector__label">{{ 'blocks.dynamic_stitch.options' | t | default: 'Options:' }}</span>
     <span class="stitch-selector__current">{{ product.title }}</span>
   </div>
   

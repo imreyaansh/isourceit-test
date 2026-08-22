@@ -60,7 +60,6 @@ export default class VariantPicker extends Component {
    */
   variantChanged(event) {
     if (!(event.target instanceof HTMLElement)) return;
-
     const selectedOption =
       event.target instanceof HTMLSelectElement ? event.target.options[event.target.selectedIndex] : event.target;
 

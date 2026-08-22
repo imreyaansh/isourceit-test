@@ -56,10 +56,11 @@
     {% render 'chat-drawer' %}
 
     <div class="page-wrapper">
-      <div id="header-group">
-        {% sections 'header-group' %}
-      </div>
-
+      {% if template.suffix != "quick-view" %}
+        <div id="header-group">
+          {% sections 'header-group' %}
+        </div>
+      {% endif %}
       <script>
         /**
          * Sets `--header-height` and `--header-group-height` to measured values before first paint.
@@ -178,9 +179,11 @@
         {{ content_for_layout }}
       </main>
 
-      <footer>
-        {% sections 'footer-group' %}
-      </footer>
+      {% if template.suffix != "quick-view" %}
+        <footer>
+          {% sections 'footer-group' %}
+        </footer>
+      {% endif %}
     </div>
 
     {% render 'cart-drawer', render_wrapper: true %}
